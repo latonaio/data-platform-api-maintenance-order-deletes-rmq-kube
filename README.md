@@ -1,6 +1,6 @@
 # data-platform-api-maintenance-order-deletes-rmq-kube
 
-data-platform-api-maintenance-order-deletes-rmq-kube は、周辺業務システム　を データ連携基盤 と統合することを目的に、API 輸送契約データに削除フラグを設定するマイクロサービスです。  
+data-platform-api-maintenance-order-deletes-rmq-kube は、周辺業務システム　を データ連携基盤 と統合することを目的に、API 保全指図データに削除フラグを設定するマイクロサービスです。  
 https://xxx.xxx.io/api/API_MAINTENANCE_ORDER_SRV/deletes/
 
 ## 動作環境
@@ -23,7 +23,7 @@ Latona および AION の データ連携基盤 関連リソースでは、Input
 
 ## Output  
 本マイクロサービスでは、[golang-logging-library-for-data-platform](https://github.com/latonaio/golang-logging-library-for-data-platform) により、以下のようなデータがJSON形式で出力されます。  
-以下の sample.json の例は 輸送契約 の ヘッダデータ に削除フラグが設定された結果の JSON の例です。  
+以下の sample.json の例は 保全指図 の ヘッダデータ に削除フラグが設定された結果の JSON の例です。  
 以下の項目のうち、"XXXXXXXXXX" ～ "XXXXXXXXXX" は、/DPFM_API_Output_Formatter/type.go 内 の Type Header {} による出力結果です。"cursor" ～ "time"は、golang-logging-library による 定型フォーマットの出力結果です。  
 
 ```
