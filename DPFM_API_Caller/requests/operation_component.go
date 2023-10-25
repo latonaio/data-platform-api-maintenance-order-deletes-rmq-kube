@@ -1,8 +1,8 @@
 package requests
 
 type OperationComponent struct {
-	MaenanceOrder                  string  `json:"MaenanceOrder"`
-	MaenanceOrderComponent         string  `json:"MaenanceOrderComponent"`
+	MaintenanceOrder               string  `json:"MaintenanceOrder"`
+	MaintenanceOrderComponent      string  `json:"MaintenanceOrderComponent"`
 	Reservation                    *string `json:"Reservation"`
 	ReservationItem                *string `json:"ReservationItem"`
 	ReservationType                *string `json:"ReservationType"`
