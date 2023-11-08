@@ -51,12 +51,19 @@ func (c *DPFMAPICaller) deleteSqlProcess(
 	log *logger.Logger,
 ) *dpfm_api_output_formatter.Message {
 	var headerData *dpfm_api_output_formatter.Header
+	itemData := make([]dpfm_api_output_formatter.ObjectListItem, 0)
 	for _, a := range accepter {
 		switch a {
 		case "Header":
 			h, i := c.headerDelete(input, output, log)
 			headerData = h
-			if h == nil || i == nil {
+			if h == nil {
+				continue
+			}
+			itemData = append(itemData, *i...)
+		case "Item":
+			i := c.itemDelete(input, output, log)
+			if i == nil {
 				continue
 			}
 			itemData = append(itemData, *i...)
@@ -72,7 +79,7 @@ func (c *DPFMAPICaller) headerDelete(
 	input *dpfm_api_input_reader.SDC,
 	output *dpfm_api_output_formatter.SDC,
 	log *logger.Logger,
-) *dpfm_api_output_formatter.Header {
+) (*dpfm_api_output_formatter.Header, *[]dpfm_api_output_formatter.ObjectListItem) {
 	sessionID := input.RuntimeSessionID
 	header := c.HeaderRead(input, log)
 	header.MaintenanceOrder = input.Header.MaintenanceOrder
@@ -81,16 +88,85 @@ func (c *DPFMAPICaller) headerDelete(
 	if err != nil {
 		err = xerrors.Errorf("rmq error: %w", err)
 		log.Error("%+v", err)
-		return nil
+		return nil, nil
 	}
 	res.Success()
 	if !checkResult(res) {
 		output.SQLUpdateResult = getBoolPtr(false)
 		output.SQLUpdateError = "Header Data cannot delete"
-		return nil
+		return nil, nil
 	}
 
-	return header
+	items := c.ItemsRead(input, log)
+	for i := range *items {
+		(*items)[i].IsMarkedForDeletion = input.Header.IsMarkedForDeletion
+		res, err := c.rmq.SessionKeepRequest(nil, c.conf.RMQ.QueueToSQL()[0], map[string]interface{}{"message": (*items)[i], "function": "MaintenanceObjectListItem", "runtime_session_id": sessionID})
+		if err != nil {
+			err = xerrors.Errorf("rmq error: %w", err)
+			log.Error("%+v", err)
+			return nil, nil
+		}
+		res.Success()
+		if !checkResult(res) {
+			output.SQLUpdateResult = getBoolPtr(false)
+			output.SQLUpdateError = "Maintenance Item Data cannot delete"
+			return nil, nil
+		}
+	}
+
+	return header, items
+}
+
+func (c *DPFMAPICaller) itemDelete(
+	input *dpfm_api_input_reader.SDC,
+	output *dpfm_api_output_formatter.SDC,
+	log *logger.Logger,
+) *[]dpfm_api_output_formatter.ObjectListItem {
+	sessionID := input.RuntimeSessionID
+
+	items := make([]dpfm_api_output_formatter.ObjectListItem, 0)
+	for _, v := range input.Header.ObjectListItem {
+		data := dpfm_api_output_formatter.ObjectListItem{
+			MaintenanceOrder:          input.Header.MaintenanceOrder,
+			MaintenanceObjectListItem: v.MaintenanceObjectListItem,
+			IsMarkedForDeletion:       v.IsMarkedForDeletion,
+		}
+		res, err := c.rmq.SessionKeepRequest(nil, c.conf.RMQ.QueueToSQL()[0], map[string]interface{}{
+			"message":            data,
+			"function":           "ObjectListItem",
+			"runtime_session_id": sessionID,
+		})
+		if err != nil {
+			err = xerrors.Errorf("rmq error: %w", err)
+			log.Error("%+v", err)
+			return nil
+		}
+		res.Success()
+		if !checkResult(res) {
+			output.SQLUpdateResult = getBoolPtr(false)
+			output.SQLUpdateError = "MaintenanceOrder ObjectList Data cannot delete"
+			return nil
+		}
+	}
+	// itemがキャンセル取り消しされた場合、headerのキャンセルも取り消す
+	if !*input.Header.ObjectListItem[0].IsMarkedForDeletion {
+		header := c.HeaderRead(input, log)
+		header.IsMarkedForDeletion = input.Header.ObjectListItem[0].IsMarkedForDeletion
+		res, err := c.rmq.SessionKeepRequest(nil, c.conf.RMQ.QueueToSQL()[0], map[string]interface{}{"message": header, "function": "MaintenanceOrderHeader", "runtime_session_id": sessionID})
+		if err != nil {
+			err = xerrors.Errorf("rmq error: %w", err)
+			log.Error("%+v", err)
+			return nil
+		}
+		res.Success()
+		if !checkResult(res) {
+			output.SQLUpdateResult = getBoolPtr(false)
+			output.SQLUpdateError = "Header Data cannot delete"
+			return nil
+		}
+	}
+
+	return &items
 }
 
 func checkResult(msg rabbitmq.RabbitmqMessage) bool {
